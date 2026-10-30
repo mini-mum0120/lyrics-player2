@@ -1,0 +1,1099 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>リアルタイム歌詞追従アプリ</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #121212;
+      color: white;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 26px;
+    }
+
+    .file-area {
+      margin: 20px 0;
+      padding: 15px;
+      background: #222;
+      border-radius: 12px;
+    }
+
+    .file-area label {
+      display: block;
+      margin: 12px;
+    }
+
+    input[type="file"] {
+      max-width: 100%;
+      margin-top: 8px;
+    }
+
+    audio {
+      width: 100%;
+      margin: 20px 0;
+    }
+
+
+/* 動画と歌詞をまとめる領域 */
+.lyrics-container {
+  position: relative;
+  height: 360px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #111;
+}
+
+/* 背景動画 */
+#backgroundVideo {
+  position: absolute;
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+  z-index: 0;
+}
+
+/* 動画を暗くするレイヤー */
+.video-overlay {
+  position: absolute;
+  inset: 0;
+
+  background: rgba(
+    0, 0, 0,
+    var(--video-darkness, 0.4)
+  );
+
+  z-index: 1;
+  pointer-events: none;
+}
+
+
+/* 歌詞表示エリア */
+#lyrics {
+  position: relative;
+  z-index: 2;
+
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+
+  padding: 0 20px;
+  background: transparent;
+
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+/* スクロールバーを非表示 */
+#lyrics::-webkit-scrollbar {
+  display: none;
+}
+
+/* 通常の歌詞 */
+.line {
+  padding: 20px 8px;
+  color: #777;
+  opacity: 0.3;
+  font-size: 20px;
+  line-height: 1.6;
+  text-align: center;
+
+  transition:
+    color 0.5s ease,
+    opacity 0.5s ease,
+    transform 0.5s ease,
+    text-shadow 0.5s ease;
+}
+
+
+/* 現在の歌詞 */
+.line.active {
+  color: var(--lyric-color, #ffffff);
+  opacity: 1;
+
+  font-size: var(--lyric-size, 24px);
+  font-weight: bold;
+
+  transform: scale(1.12);
+
+  text-shadow:
+    0 0 10px rgba(
+      255, 255, 255,
+      var(--glow-opacity, 0.7)
+    ),
+    0 0 25px rgba(
+      255, 255, 255,
+      var(--glow-opacity-soft, 0.3)
+    );
+}
+
+
+/* 前後1行の歌詞 */
+.line.near {
+  color: #bbbbbb;
+  opacity: 0.65;
+}
+
+
+    #status {
+      color: #aaa;
+      font-size: 14px;
+    }
+
+
+/* 歌詞の上下に余白を作る */
+#lyrics::before,
+#lyrics::after {
+  content: "";
+  display: block;
+  height: 50%;
+  flex-shrink: 0;
+}
+
+/* タイミング調整パネル */
+.sync-control {
+  background: #222;
+  padding: 20px;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.sync-control h3 {
+  font-size: 16px;
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.sync-buttons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+/* ボタンのデザイン */
+.sync-control button {
+  background: #383838;
+  color: white;
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.sync-control button:hover {
+  background: #555;
+}
+
+/* 現在の補正値 */
+#offsetDisplay {
+  font-size: 22px;
+  font-weight: bold;
+  min-width: 100px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 歌詞にマウスを乗せたとき */
+.line {
+  cursor: pointer;
+}
+
+/* マウスを乗せた歌詞を少し明るくする */
+.line:hover {
+  color: #ffffff;
+  opacity: 0.85;
+}
+
+/* 現在の歌詞にマウスを乗せたとき */
+.line.active:hover {
+  opacity: 1;
+}
+
+/* 設定パネル */
+.settings-panel {
+  background: #222;
+  padding: 20px;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.settings-panel h3 {
+  font-size: 16px;
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+/* 各設定項目 */
+.setting-item {
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.setting-item label {
+  display: block;
+  margin-bottom: 12px;
+  color: #ddd;
+}
+
+/* スライダー */
+.setting-item input[type="range"] {
+  width: 100%;
+  cursor: pointer;
+  accent-color: #ffffff;
+}
+
+/* カラーピッカー */
+.setting-item input[type="color"] {
+  width: 65px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* リセットボタン */
+#resetSettings {
+  background: #383838;
+  color: white;
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+#resetSettings:hover {
+  background: #555;
+}
+
+/* ==================================
+   画面サイズに合わせた基本設定
+================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* メインコンテンツの横幅 */
+.container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* 音楽プレーヤー */
+audio {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* ファイル選択欄 */
+input[type="file"] {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* 動画・歌詞の表示領域 */
+.lyrics-container {
+  width: 100%;
+  height: 420px;
+}
+
+/* ==================================
+   スマホ向けデザイン
+   画面幅600px以下
+================================== */
+
+@media (max-width: 600px) {
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .container {
+    padding: 12px;
+  }
+
+  h1 {
+    font-size: 22px;
+    line-height: 1.4;
+  }
+
+  /* 歌詞表示領域 */
+  .lyrics-container {
+    height: 55dvh;
+    min-height: 300px;
+    max-height: 550px;
+    border-radius: 10px;
+  }
+
+  #lyrics {
+    padding: 0 12px;
+  }
+
+  /* 歌詞の行間と余白 */
+  .line {
+    padding: 16px 6px;
+    font-size: 18px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+
+  /* 現在の歌詞 */
+  .line.active {
+    font-size: var(--lyric-size, 24px);
+    transform: scale(1.05);
+  }
+
+  /* タイミング調整パネル */
+  .sync-control {
+    padding: 15px;
+  }
+
+  .sync-buttons {
+    gap: 8px;
+  }
+
+  #offsetDisplay {
+    font-size: 18px;
+    min-width: 80px;
+  }
+
+  /* 設定パネル */
+  .settings-panel {
+    padding: 15px;
+  }
+
+  /* タッチしやすいボタン */
+  button {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  /* スライダー */
+  input[type="range"] {
+    min-height: 36px;
+    width: 100%;
+  }
+}
+
+/* ==================================
+   タブレット向けデザイン
+   601px〜1024px
+================================== */
+
+@media (min-width: 601px) and (max-width: 1024px) {
+
+  .container {
+    padding: 24px;
+  }
+
+  .lyrics-container {
+    height: 55dvh;
+    min-height: 400px;
+    max-height: 700px;
+  }
+
+  .line {
+    padding: 22px 10px;
+  }
+
+  .sync-control,
+  .settings-panel {
+    padding: 24px;
+  }
+
+  button {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}
+
+/* 歌詞をタッチしたとき */
+.line {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
+}
+
+/* タッチ中のフィードバック */
+.line:active {
+  opacity: 0.85;
+}
+
+/* タッチ操作の端末ではホバー効果を無効化 */
+@media (hover: none) {
+  .line:hover:not(.active) {
+    color: #777;
+    opacity: 0.3;
+  }
+
+  .line.near:hover:not(.active) {
+    color: #bbbbbb;
+    opacity: 0.65;
+  }
+}
+
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>リアルタイム歌詞追従</h1>
+
+    <div class="file-area">
+      <label>
+        音楽ファイルを選択
+        <input type="file" id="audioFile" accept="audio/*">
+      </label>
+
+      <label>
+        LRCファイルを選択
+        <input type="file" id="lrcFile" accept=".lrc,.txt">
+      </label>
+    </div>
+
+<!-- 背景動画ファイル -->
+<label>
+  背景動画を選択
+  <input
+    type="file"
+    id="videoFile"
+    accept="video/*"
+  >
+</label>
+
+    <audio id="audio" controls></audio>
+
+<!-- 歌詞のタイミング調整 -->
+<div class="sync-control">
+  <h3>歌詞のタイミング調整</h3>
+
+  <div class="sync-buttons">
+    <button id="minusBtn">－ 0.1秒</button>
+
+    <span id="offsetDisplay">+0.0 秒</span>
+
+    <button id="plusBtn">＋ 0.1秒</button>
+  </div>
+
+  <button id="resetBtn">リセット</button>
+</div>
+
+<!-- 歌詞の表示設定 -->
+<div class="settings-panel">
+  <h3>歌詞の表示設定</h3>
+
+  <!-- 文字サイズ -->
+  <div class="setting-item">
+    <label for="fontSize">
+      文字サイズ：
+      <span id="fontSizeValue">24</span>px
+    </label>
+
+    <input
+      type="range"
+      id="fontSize"
+      min="18"
+      max="36"
+      value="24"
+    >
+  </div>
+
+  <!-- 文字色 -->
+  <div class="setting-item">
+    <label for="lyricColor">文字色</label>
+
+    <input
+      type="color"
+      id="lyricColor"
+      value="#ffffff"
+    >
+  </div>
+
+  <!-- 光の強さ -->
+  <div class="setting-item">
+    <label for="glowStrength">
+      光の強さ：
+      <span id="glowValue">70</span>%
+    </label>
+
+    <input
+      type="range"
+      id="glowStrength"
+      min="0"
+      max="100"
+      value="70"
+    >
+  </div>
+
+<!-- 背景動画の明るさ -->
+<div class="setting-item">
+  <label for="videoBrightness">
+    動画の明るさ：
+    <span id="brightnessValue">60</span>%
+  </label>
+
+  <input
+    type="range"
+    id="videoBrightness"
+    min="0"
+    max="100"
+    value="60"
+  >
+</div>
+
+  <!-- リセット -->
+  <button id="resetSettings">
+    設定をリセット
+  </button>
+
+</div>
+
+    <p id="status">音楽ファイルとLRCファイルを選択してください。</p>
+
+
+<!-- 動画と歌詞を重ねる領域 -->
+<div class="lyrics-container">
+
+  <!-- 背景動画 -->
+  <video
+    id="backgroundVideo"
+    muted
+    loop
+    playsinline
+    preload="metadata"
+  ></video>
+
+  <!-- 動画の暗さを調整するレイヤー -->
+  <div class="video-overlay"></div>
+
+  <!-- 歌詞 -->
+  <div id="lyrics">
+    <p>ここに歌詞が表示されます</p>
+  </div>
+
+</div>
+
+  </div>
+
+  <script>
+    const audio = document.getElementById("audio");
+    const audioFile = document.getElementById("audioFile");
+    const lrcFile = document.getElementById("lrcFile");
+    const lyricsBox = document.getElementById("lyrics");
+    const status = document.getElementById("status");
+
+    let lyrics = [];
+    let currentIndex = -1;
+    let audioUrl = null;
+
+/* 歌詞のタイミング補正値（秒） */
+let lyricOffset = 0;
+
+/* 操作パネルの部品を取得 */
+const minusBtn = document.getElementById("minusBtn");
+const plusBtn = document.getElementById("plusBtn");
+const resetBtn = document.getElementById("resetBtn");
+const offsetDisplay = document.getElementById("offsetDisplay");
+
+    // 音楽ファイルを読み込む
+    audioFile.addEventListener("change", () => {
+      const file = audioFile.files[0];
+      if (!file) return;
+
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+
+      audioUrl = URL.createObjectURL(file);
+      audio.src = audioUrl;
+      audio.load();
+    });
+
+    // LRCファイルを読み込む
+    lrcFile.addEventListener("change", async () => {
+      const file = lrcFile.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        parseLRC(text);
+        renderLyrics();
+        currentIndex = -1;
+
+        status.textContent = lyrics.length
+          ? `${lyrics.length}行の歌詞を読み込みました。`
+          : "有効な歌詞のタイムスタンプが見つかりません。";
+      } catch (error) {
+        status.textContent = "LRCファイルを読み込めませんでした。";
+      }
+    });
+
+    // LRCの文字列を時刻と歌詞に分解する
+    function parseLRC(text) {
+      lyrics = [];
+
+      const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+
+      for (const line of lines) {
+        const pattern = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
+        const matches = [...line.matchAll(pattern)];
+
+        // タイムスタンプがない行はスキップ
+        if (matches.length === 0) continue;
+
+        // タイムスタンプ部分を取り除いて歌詞を取得
+        const lyric = line.replace(pattern, "").trim();
+
+        for (const match of matches) {
+          const minutes = Number(match[1]);
+          const seconds = Number(match[2]);
+          const fraction = match[3] || "0";
+
+          // 1桁は100ミリ秒、2桁は10ミリ秒、3桁は1ミリ秒
+          const milliseconds = Number(
+            fraction.padEnd(3, "0")
+          );
+
+          const time =
+            minutes * 60 + seconds + milliseconds / 1000;
+
+          lyrics.push({ time, text: lyric });
+        }
+      }
+
+      // 時刻の早い順に並べる
+      lyrics.sort((a, b) => a.time - b.time);
+    }
+
+function renderLyrics() {
+  lyricsBox.replaceChildren();
+
+  if (lyrics.length === 0) {
+    lyricsBox.textContent = "歌詞がありません";
+    return;
+  }
+
+  lyrics.forEach((item, index) => {
+    const line = document.createElement("div");
+
+    line.className = "line";
+    line.textContent = item.text || "♪";
+    line.dataset.index = index;
+
+    // 歌詞をクリックしたときの処理
+    line.addEventListener("click", () => {
+
+      // 補正値を考慮した再生時刻
+      const seekTime = item.time + lyricOffset;
+
+      // 0秒未満にならないようにする
+      audio.currentTime = Math.max(0, seekTime);
+
+      // 歌詞の表示をすぐ更新
+      updateLyrics();
+    });
+
+    lyricsBox.appendChild(line);
+  });
+}
+
+
+function updateLyrics() {
+  if (lyrics.length === 0) return;
+
+const time = audio.currentTime - lyricOffset;
+  let index = -1;
+
+  // 現在の再生時刻に対応する歌詞を探す
+  for (let i = 0; i < lyrics.length; i++) {
+    if (lyrics[i].time <= time) {
+      index = i;
+    } else {
+      break;
+    }
+  }
+
+  // 同じ歌詞なら何もしない
+  if (index === currentIndex) return;
+
+  currentIndex = index;
+
+  const lines = lyricsBox.querySelectorAll(".line");
+
+  lines.forEach((line, i) => {
+    // 現在の歌詞
+    line.classList.toggle("active", i === index);
+
+    // 前後1行の歌詞
+    line.classList.toggle(
+      "near",
+      index >= 0 && Math.abs(i - index) === 1
+    );
+  });
+
+  // 現在の歌詞を中央に移動
+  if (index >= 0) {
+    const activeLine = lines[index];
+
+    const targetScroll =
+      activeLine.offsetTop -
+      lyricsBox.offsetTop -
+      lyricsBox.clientHeight / 2 +
+      activeLine.clientHeight / 2;
+
+    lyricsBox.scrollTo({
+      top: targetScroll,
+      behavior: "smooth"
+    });
+  }
+}
+
+
+    // 再生中、シーク中、再生位置変更時に更新
+    audio.addEventListener("timeupdate", updateLyrics);
+    audio.addEventListener("seeked", updateLyrics);
+
+    // 再生位置を先頭に戻した場合にも対応
+    audio.addEventListener("ended", updateLyrics);
+
+/* 補正値を変更する関数 */
+function changeOffset(amount) {
+  lyricOffset += amount;
+
+  // 小数の計算誤差を防ぐ
+  lyricOffset = Math.round(lyricOffset * 10) / 10;
+
+  // -5秒から+5秒までに制限
+  lyricOffset = Math.max(-5, Math.min(5, lyricOffset));
+
+  // 表示を更新
+  offsetDisplay.textContent =
+    (lyricOffset >= 0 ? "+" : "") +
+    lyricOffset.toFixed(1) + " 秒";
+
+  // 補正値を変更したら歌詞も更新
+  currentIndex = -1;
+  updateLyrics();
+}
+
+/* －ボタン */
+minusBtn.addEventListener("click", () => {
+  changeOffset(-0.1);
+});
+
+/* ＋ボタン */
+plusBtn.addEventListener("click", () => {
+  changeOffset(0.1);
+});
+
+/* リセットボタン */
+resetBtn.addEventListener("click", () => {
+  changeOffset(-lyricOffset);
+});
+
+// =====================================
+// 歌詞の表示設定
+// =====================================
+
+// HTMLの設定項目を取得
+const fontSizeInput = document.getElementById("fontSize");
+const lyricColorInput = document.getElementById("lyricColor");
+const glowInput = document.getElementById("glowStrength");
+
+const brightnessInput =
+  document.getElementById("videoBrightness");
+
+const brightnessValue =
+  document.getElementById("brightnessValue");
+
+const fontSizeValue = document.getElementById("fontSizeValue");
+const glowValue = document.getElementById("glowValue");
+const resetSettingsBtn = document.getElementById("resetSettings");
+
+// 初期設定
+const defaultSettings = {
+  fontSize: 24,
+  color: "#ffffff",
+  glow: 70,
+  brightness: 60
+};
+
+// 保存された設定を読み込む
+let savedSettings;
+
+try {
+  savedSettings = JSON.parse(
+    localStorage.getItem("lyricSettings")
+  );
+} catch (error) {
+  savedSettings = null;
+}
+
+// 保存値がない場合は初期設定を使用
+let settings = { ...defaultSettings };
+
+if (savedSettings && typeof savedSettings === "object") {
+  if (Number.isInteger(savedSettings.fontSize)) {
+    settings.fontSize = Math.max(
+      18, Math.min(36, savedSettings.fontSize)
+    );
+  }
+
+  if (/^#[0-9a-fA-F]{6}$/.test(savedSettings.color || "")) {
+    settings.color = savedSettings.color;
+  }
+
+  if (Number.isFinite(savedSettings.glow)) {
+    settings.glow = Math.max(
+      0, Math.min(100, savedSettings.glow)
+    );
+  }
+
+if (Number.isFinite(savedSettings.brightness)) {
+  settings.brightness = Math.max(
+    0, Math.min(100, savedSettings.brightness)
+  );
+}
+
+}
+
+// 設定を画面に反映
+function applySettings() {
+  // CSS変数を変更
+  document.documentElement.style.setProperty(
+    "--lyric-size",
+    settings.fontSize + "px"
+  );
+
+  document.documentElement.style.setProperty(
+    "--lyric-color",
+    settings.color
+  );
+
+  document.documentElement.style.setProperty(
+    "--glow-opacity",
+    settings.glow / 100
+  );
+
+  document.documentElement.style.setProperty(
+    "--glow-opacity-soft",
+    settings.glow / 100 * 0.4
+  );
+
+  // 入力欄を更新
+  fontSizeInput.value = settings.fontSize;
+  lyricColorInput.value = settings.color;
+  glowInput.value = settings.glow;
+
+  // 数値表示を更新
+  fontSizeValue.textContent = settings.fontSize;
+  glowValue.textContent = settings.glow;
+
+// 動画の暗さを変更
+document.documentElement.style.setProperty(
+  "--video-darkness",
+  1 - settings.brightness / 100
+);
+
+// スライダーと表示を更新
+brightnessInput.value = settings.brightness;
+brightnessValue.textContent = settings.brightness;
+
+  // 設定を保存
+  try {
+    localStorage.setItem(
+      "lyricSettings",
+      JSON.stringify(settings)
+    );
+  } catch (error) {
+    console.warn("設定を保存できませんでした", error);
+  }
+}
+
+// 文字サイズを変更
+fontSizeInput.addEventListener("input", () => {
+  settings.fontSize = Number(fontSizeInput.value);
+  applySettings();
+});
+
+// 文字色を変更
+lyricColorInput.addEventListener("input", () => {
+  settings.color = lyricColorInput.value;
+  applySettings();
+});
+
+// 光の強さを変更
+glowInput.addEventListener("input", () => {
+  settings.glow = Number(glowInput.value);
+  applySettings();
+});
+
+brightnessInput.addEventListener("input", () => {
+  settings.brightness = Number(brightnessInput.value);
+  applySettings();
+});
+
+// 設定をリセット
+resetSettingsBtn.addEventListener("click", () => {
+  settings = { ...defaultSettings };
+  applySettings();
+});
+
+// ページを開いたときに設定を反映
+applySettings();
+
+// =====================================
+// 背景動画の読み込み
+// =====================================
+
+const videoFileInput = document.getElementById("videoFile");
+const backgroundVideo = document.getElementById("backgroundVideo");
+
+let videoUrl = null;
+
+// 動画ファイルが選択されたとき
+videoFileInput.addEventListener("change", () => {
+  const file = videoFileInput.files[0];
+  if (!file) return;
+
+  // 前の動画を停止
+  backgroundVideo.pause();
+
+  // 前の動画URLを解放
+  if (videoUrl) {
+    URL.revokeObjectURL(videoUrl);
+  }
+
+  // 新しい動画を読み込む
+  videoUrl = URL.createObjectURL(file);
+
+  backgroundVideo.src = videoUrl;
+  backgroundVideo.load();
+
+  // 動画は無音で再生
+  backgroundVideo.muted = true;
+});
+
+// =====================================
+// 音楽と動画の再生連動
+// =====================================
+
+// 音楽が再生されたとき
+audio.addEventListener("play", async () => {
+  if (!backgroundVideo.src) return;
+
+  try {
+    await backgroundVideo.play();
+  } catch (error) {
+    console.warn("動画を再生できませんでした", error);
+  }
+});
+
+// 音楽が一時停止したとき
+audio.addEventListener("pause", () => {
+  backgroundVideo.pause();
+});
+
+// 音楽が終了したとき
+audio.addEventListener("ended", () => {
+  backgroundVideo.pause();
+});
+
+// =====================================
+// 動画の再生位置を同期する
+// =====================================
+
+function syncVideoTime() {
+  if (!backgroundVideo.src) return;
+
+  const duration = backgroundVideo.duration;
+
+  // 動画の長さが取得できない場合は処理しない
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return;
+  }
+
+  // 動画の長さで割った余りを使ってループ
+  const targetTime = audio.currentTime % duration;
+
+  // 動画と音楽の再生位置のズレを確認
+  const difference = Math.abs(
+    backgroundVideo.currentTime - targetTime
+  );
+
+  // 0.5秒以上ずれたら補正
+  if (difference > 0.5) {
+    backgroundVideo.currentTime = targetTime;
+  }
+}
+
+// 音楽の再生位置が変更されたとき
+audio.addEventListener("seeked", syncVideoTime);
+
+// 音楽の再生中も定期的に確認
+audio.addEventListener("timeupdate", syncVideoTime);
+
+// 動画が読み込まれたとき
+backgroundVideo.addEventListener(
+  "loadedmetadata",
+  syncVideoTime
+);
+
+// =====================================
+// 画面サイズ変更時の歌詞位置調整
+// =====================================
+
+window.addEventListener("resize", () => {
+  if (currentIndex < 0) return;
+
+  const lines = lyricsBox.querySelectorAll(".line");
+  const activeLine = lines[currentIndex];
+
+  if (!activeLine) return;
+
+  const targetScroll =
+    activeLine.offsetTop -
+    lyricsBox.offsetTop -
+    lyricsBox.clientHeight / 2 +
+    activeLine.clientHeight / 2;
+
+  lyricsBox.scrollTo({
+    top: targetScroll,
+    behavior: "instant"
+  });
+});
+
+  </script>
+</body>
+</html>
